@@ -9,6 +9,7 @@ namespace SqlServer.Rules.Report
         public string Solution { get; set; }
         public string InputPath { get; set; }
 
+        public string InputDB { get; set; }
         public string SolutionName
         {
             get { return Path.GetFileNameWithoutExtension(Solution); }
@@ -35,7 +36,8 @@ namespace SqlServer.Rules.Report
 
         public string FileName
         {
-            get { return Path.GetFileNameWithoutExtension(InputPath); }
+            get; set;
+            //get { return Path.GetFileNameWithoutExtension(InputPath); }
         }
 
         public ReportOutputType ReportOutputType { get; set; } = ReportOutputType.XML;

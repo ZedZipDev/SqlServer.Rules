@@ -62,6 +62,11 @@ namespace SqlServer.Rules.Design
             if (sqlObj == null || sqlObj.IsWhiteListed()) { return problems; }
 
             var fragment = sqlObj.GetFragment();
+
+            // The fragment may be null by some reasons (?)
+            //if (fragment.ScriptTokenStream == null) { return problems; }
+            if (fragment == null || fragment.ScriptTokenStream == null) { return problems; }
+
             if (fragment.ScriptTokenStream == null) { return problems; }
 
             var visitor = new VariablesVisitor();

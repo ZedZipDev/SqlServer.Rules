@@ -84,6 +84,12 @@ namespace SqlServer.Rules.Design
             else if (sqlObj.ObjectType == Table.TypeClass)
             {
                 var createTable = ruleExecutionContext.ScriptFragment as CreateTableStatement;
+
+                // may be null 
+                if (createTable == null)
+                {
+                    return problems;
+                }
                 var identityColumn = createTable.Definition.ColumnDefinitions.FirstOrDefault(cd => cd.IdentityOptions != null);
                 if (identityColumn != null)
                 {

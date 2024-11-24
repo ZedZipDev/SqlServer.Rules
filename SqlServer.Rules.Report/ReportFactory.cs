@@ -1,6 +1,7 @@
-﻿using Microsoft.SqlServer.Dac.CodeAnalysis;
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.SqlServer.Dac;
+using Microsoft.SqlServer.Dac.CodeAnalysis;
 using Microsoft.SqlServer.Dac.Model;
-using SqlServer.Dac;
 using SqlServer.Rules.Report.Properties;
 using System;
 using System.Collections.Generic;
@@ -20,30 +21,51 @@ namespace SqlServer.Rules.Report
         public delegate void NotifyHandler(string notificationMessage, NotificationType type);
 
         public event NotifyHandler Notify;
+        public string SQLServer = "";
+        public string Database = "";
 
         public void Create(ReportRequest request)
         {
             var fileName = Path.GetFileNameWithoutExtension(request.InputPath);
 
-            #region Loading dacpac
-            SendNotification($"Loading {request.FileName}.dacpac");
+            #region Loading db model
+
             var sw = Stopwatch.StartNew();
 
-            //load the dacpac
-            TSqlModel model = TSqlModel.LoadFromDacpac(
-                    request.InputPath
-                    , new ModelLoadOptions()
-                    {
-                        LoadAsScriptBackedModel = true,
-                        ModelStorageType = Microsoft.SqlServer.Dac.DacSchemaModelStorageType.Memory
-                    });
+            TSqlModel model = null;
+            if (!string.IsNullOrWhiteSpace(request.InputPath))
+            {
+                SendNotification($"Loading {request.FileName}.dacpac");
+                //load the dacpac
+                model = TSqlModel.LoadFromDacpac(
+                       request.InputPath
+                       , new ModelLoadOptions()
+                       {
+                           LoadAsScriptBackedModel = true,
+                           ModelStorageType = Microsoft.SqlServer.Dac.DacSchemaModelStorageType.Memory
+                       });
+            }
+            else
+            {
+                SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(request.InputDB);
+                SQLServer = builder.DataSource;
+                Database = builder.InitialCatalog;
+
+                SendNotification($"Loading Database {SQLServer}:{Database}...");
+                model = TSqlModel.LoadFromDatabase(request.InputDB);
+            }
+
+
             CodeAnalysisServiceFactory factory = new CodeAnalysisServiceFactory();
             CodeAnalysisService service = factory.CreateAnalysisService(model);
 
             //surpress rules
             service.SetProblemSuppressor(request.Suppress);
             sw.Stop();
-            SendNotification($"Loading {request.FileName}.dacpac complete, elapsed: {sw.Elapsed.ToString(@"hh\:mm\:ss")}");
+            if (!string.IsNullOrWhiteSpace(request.InputPath))
+                SendNotification($"Loading {request.FileName}.dacpac complete, elapsed: {sw.Elapsed.ToString(@"hh\:mm\:ss")}");
+            else
+                SendNotification($"Loading Database {SQLServer}:{Database} complete, elapsed: {sw.Elapsed.ToString(@"hh\:mm\:ss")}");
             #endregion
 
             #region Running rules
@@ -77,7 +99,8 @@ namespace SqlServer.Rules.Report
                 {
                     SendNotification(err.ErrorMessageString, NotificationType.Warning);
                 }
-                result.SerializeResultsToXml(GetOutputFileName(request, ReportOutputType.XML));
+                result.SerializeResultsToXml(GetOutputFileName(request, ReportOutputType.CSV));
+                //result.SerializeResultsToXml(GetOutputFileName(request, ReportOutputType.XML));
             }
             sw.Stop();
             SendNotification($"Running rules complete, elapsed: {sw.Elapsed.ToString(@"hh\:mm\:ss")}");
@@ -178,7 +201,7 @@ namespace SqlServer.Rules.Report
             return from p in problems
                    select new Issue
                    {
-                       File = !string.IsNullOrWhiteSpace(p.SourceName) ? p.SourceName : p.ModelElement.Name.GetName(),
+                       File = !string.IsNullOrWhiteSpace(p.SourceName) ? p.SourceName : p.ModelElement.Name.ToString(),//.GetName(),
                        Line = p.StartLine,
                        Message = p.Description,// p.ErrorMessageString,
                        Offset = p.StartColumn.ToString(),
